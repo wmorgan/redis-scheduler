@@ -12,12 +12,11 @@ spec = Gem::Specification.new do |s|
  s.homepage = "http://gitub.com/wmorgan/redis-scheduler"
  s.files = %w(README COPYING lib/redis-scheduler.rb)
  s.executables = []
- #s.extra_rdoc_files = %w(README)
- #s.rdoc_options = %w(-c utf8 --main README --title Redis)
+ s.rdoc_options = %w(-c utf8 --main README)
 end
 
 task :rdoc do |t|
-  sh "rm -rf doc; rdoc #{spec.rdoc_options.join(' ')} #{spec.extra_rdoc_files.join(' ')} lib/whistlepig.rb"
+  sh "rm -rf doc; rdoc #{spec.rdoc_options.join(' ')} #{spec.files.join(' ')}"
 end
 
 Gem::PackageTask.new spec do
