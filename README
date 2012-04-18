@@ -1,0 +1,38 @@
+This is a basic chronological scheduler for Redis. It allows you to schedule
+items to be processed at arbitrary points in time (via #schedule!), and then
+to easily retrieve only those items that are due to be processed (via #each!).
+Items are represented as strings.
+
+It does everything you'd want from a production scheduler:
+* You can schedule arbitrary items at arbitrary times.
+* It supports multiple simultaneous readers and writers.
+* An exception causes the in-process item to be rescheduled at the original time.
+* A crash leaves the item in an error queue, from which it can later be recovered.
+* You can iterate over ready items in either blocking or non-blocking mode.
+
+In non-blocking mode (the default), #each will iterate only over those work items
+whose scheduled time is less than or equal to the current time, and then stop.
+In blocking mode, #each will iterate over the same items, but will also block
+until items are available. In blocking mode, #each will never return.
+
+== Synopsis
+
+  r = Redis.new
+  s = RedisScheduler.new r, blocking: true
+  startt = Time.now
+  s.schedule! "a", startt + 10
+  s.schedule! "b", startt + 15
+  s.schedule! "c", startt + 20
+  s.each { |item, at| puts "#{Time.now - startt}: #{item}" }
+
+  prints:
+
+  10.03481788: a
+  15.05255288: b
+  20.06058172: c
+  ... waits forever ...
+
+== Bug reports
+
+Please file bugs here: https://github.com/wmorgan/redis-scheduler/issues
+Please send comments to: wmorgan-redis-scheduler-readme@masanjin.net.
