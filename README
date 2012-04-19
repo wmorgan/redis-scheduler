@@ -32,6 +32,10 @@ until items are available. In blocking mode, #each will never return.
   20.06058172: c
   ... waits forever ...
 
+== Implementation
+
+See http://masanjin.net/blog/using-redis-for-scheduling for some details.
+
 == Bug reports
 
 Please file bugs here: https://github.com/wmorgan/redis-scheduler/issues
