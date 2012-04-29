@@ -45,14 +45,14 @@ class RedisScheduler
   ## become available (and never terminate).
   def each
     while(x = get)
-      item, at = x
+      item, erritem, at = x
       begin
         yield item, at
       rescue Exception # back in the hole!
         schedule! item, at
         raise
       ensure
-        cleanup! item
+        cleanup! erritem
       end
     end
   end
@@ -90,8 +90,8 @@ private
           throw :cas_retry
         end
         item =~ /^\d+:(\S+)$/ or raise InvalidEntryException, item
-        item = $1
-        [item, Time.at(at.to_f)]
+        original = $1
+        [original, item, Time.at(at.to_f)]
       end
     end
   end
