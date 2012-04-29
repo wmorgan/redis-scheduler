@@ -35,6 +35,9 @@ class RedisScheduler
     [@queue, @error_queue, @counter].each { |k| @redis.del k }
   end
 
+  def size; @redis.zcard @queue end
+  def error_queue_size; @redis.llen @error_queue end
+
   ## yields items along with their scheduled times. only returns items
   ## on or after their scheduled times. items returned as strings. if
   ## @blocking is false, will stop once there are no more items that can
