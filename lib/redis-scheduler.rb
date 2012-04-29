@@ -57,6 +57,15 @@ class RedisScheduler
     end
   end
 
+  ## returns an Enumerable of [item, schedule time] pairs, which can be used to
+  ## easily iterate over all the items in the queue, in order of earliest- to
+  ## latest-scheduled. note that this view is not coordinated with write
+  ## operations, and may be inconsistent (e.g. return duplicates, miss items,
+  ## etc).
+  ##
+  ## for these reasons, this operation is mainly useful for debugging purposes.
+  def items; ItemEnumerator.new(@redis, @queue) end
+
 private
 
   def get; @blocking ? blocking_get : nonblocking_get end
@@ -90,4 +99,31 @@ private
   def cleanup! item
     @redis.lrem @error_queue, 1, item
   end
+
+  ## enumerable for just iterating over everything in the queue
+  class ItemEnumerator
+    include Enumerable
+    def initialize redis, q
+      @redis = redis
+      @q = q
+    end
+
+    BLOCK_SIZE = 10
+    def each
+      start = 0
+      while start < size
+        elements = @redis.zrange @q, start, start + BLOCK_SIZE,
+          :withscores => true
+        elements.each_slice(2) do |item, at| # isgh
+          item =~ /^\d+:(\S+)$/ or raise InvalidEntryException, item
+          item = $1
+          yield item, Time.at(at.to_f)
+        end
+        start += elements.size
+      end
+    end
+
+    def size; @redis.zcard @q end
+  end
+
 end
