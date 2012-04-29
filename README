@@ -1,13 +1,14 @@
 This is a basic chronological scheduler for Redis. It allows you to schedule
 items to be processed at arbitrary points in time (via #schedule!), and then
-to easily retrieve only those items that are due to be processed (via #each!).
+to easily retrieve only those items that are due to be processed (via #each).
+
 Items are represented as strings.
 
 It does everything you'd want from a production scheduler:
-* You can schedule arbitrary items at arbitrary times.
+* You can schedule items at arbitrary times.
 * It supports multiple simultaneous readers and writers.
 * An exception causes the in-process item to be rescheduled at the original time.
-* A crash leaves the item in an error queue, from which it can later be recovered.
+* A crash leaves the item in a separate error queue, from which it can later be recovered.
 * You can iterate over ready items in either blocking or non-blocking mode.
 
 In non-blocking mode (the default), #each will iterate only over those work items

@@ -5,9 +5,8 @@ class RedisScheduler
   CAS_DELAY  = 0.5 # seconds
 
   ## options:
-  ##   namespace: prefix for redis data, e.g. "scheduler/"
-  ##   blocking: whether #each should block or return immediately if
-  ##     there are items to be processed immediately.
+  ## * +namespace+: prefix for redis data, e.g. "scheduler/"
+  ## * +blocking+: whether #each should block or return immediately if there are items to be processed immediately.
   ##
   ## Note that nonblocking mode may still actually block as part of the
   ## check-and-set semantics, i.e. block during contention from multiple
