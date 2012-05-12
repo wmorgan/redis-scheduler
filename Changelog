@@ -1,3 +1,11 @@
+0.4 / 2012-05-12
+- Allow random access in ItemEnumerator via #[]
+- Rename "error queue" to "processing set", add timestamps, and allow iteration
+through this set.
+- Wire through a "descriptor" field to allow marking of items on the processing set
+with who is processing them.
+- Improve documentation.
+
 0.3 / 2012-04-28:
 - items were not actually being removed from the error queue. fix that.
 - add #items for iterating over items for debugging purposes.
