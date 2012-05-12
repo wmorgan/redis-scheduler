@@ -124,19 +124,24 @@ private
       @q = q
     end
 
-    BLOCK_SIZE = 10
+    PAGE_SIZE = 50
     def each
       start = 0
       while start < size
-        elements = @redis.zrange @q, start, start + BLOCK_SIZE,
-          :withscores => true
-        elements.each_slice(2) do |item, at| # isgh
-          item =~ /^\d+:(\S+)$/ or raise InvalidEntryException, item
-          item = $1
-          yield item, Time.at(at.to_f)
-        end
+        elements = self[start, PAGE_SIZE]
+        elements.each { |*x| yield(*x) }
         start += elements.size
       end
+    end
+
+    def [] start, num=nil
+      elements = @redis.zrange @q, start, start + (num || 0) - 1, :withscores => true
+      v = elements.each_slice(2).map do |item, at|
+        item =~ /^\d+:(\S+)$/ or raise InvalidEntryException, item
+        item = $1
+        [item, Time.at(at.to_f)]
+      end
+      num ? v : v.first
     end
 
     def size; @redis.zcard @q end
