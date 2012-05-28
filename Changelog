@@ -1,9 +1,13 @@
+0.5 / 2012-05-28
+- Fix transaction logic that would cause occasional bad reads under
+  simultaneous access.
+
 0.4 / 2012-05-12
 - Allow random access in ItemEnumerator via #[]
 - Rename "error queue" to "processing set", add timestamps, and allow iteration
-through this set.
+  through this set.
 - Wire through a "descriptor" field to allow marking of items on the processing set
-with who is processing them.
+  with who is processing them.
 - Improve documentation.
 
 0.3 / 2012-04-28:
