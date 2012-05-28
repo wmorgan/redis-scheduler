@@ -120,22 +120,18 @@ private
   ## zset yourself.
   class InvalidEntryException < StandardError; end
   def nonblocking_get descriptor
-    catch :cas_retry do
+    loop do
       @redis.watch @queue
       entry, at = @redis.zrangebyscore @queue, 0, Time.now.to_f, :withscores => true, :limit => [0, 1]
-      if entry
-        entry =~ /^\d+:(\S+)$/ or raise InvalidEntryException, entry
-        item = $1
-        processing_descriptor = Marshal.dump [item, Time.now.to_i, descriptor]
-        @redis.multi do # try and grab it
-          @redis.zrem @queue, entry
-          @redis.sadd @processing_set, processing_descriptor
-        end or begin
-          sleep CAS_DELAY
-          throw :cas_retry
-        end
-        [item, processing_descriptor, Time.at(at.to_f)]
-      end
+      break unless entry
+      entry =~ /^\d+:(\S+)$/ or raise InvalidEntryException, entry
+      item = $1
+      descriptor = Marshal.dump [item, Time.now.to_i, descriptor]
+      @redis.multi do # try and grab it
+        @redis.zrem @queue, entry
+        @redis.sadd @processing_set, descriptor
+      end and break [item, descriptor, Time.at(at.to_f)]
+      sleep CAS_DELAY # transaction failed. retry!
     end
   end
 
