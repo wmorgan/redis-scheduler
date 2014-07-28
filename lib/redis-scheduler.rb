@@ -122,8 +122,9 @@ private
   def nonblocking_get descriptor
     loop do
       @redis.watch @queue
-      entry, at = @redis.zrangebyscore @queue, 0, Time.now.to_f, :withscores => true, :limit => [0, 1]
-      break unless entry
+      entries = @redis.zrangebyscore @queue, 0, Time.now.to_f, :withscores => true, :limit => [0, 1]
+      break unless entries.size > 0
+      entry, at = entries.first
       entry =~ /^\d+:(\S+)$/ or raise InvalidEntryException, entry
       item = $1
       descriptor = Marshal.dump [item, Time.now.to_i, descriptor]
