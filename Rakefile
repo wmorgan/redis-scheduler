@@ -3,7 +3,7 @@ require 'rubygems/package_task'
 
 spec = Gem::Specification.new do |s|
  s.name = "redis-scheduler"
- s.version = "0.5"
+ s.version = "0.7"
  s.date = Time.now
  s.email = "wmorgan-redis-scheduler@masanjin.net"
  s.authors = ["William Morgan"]
