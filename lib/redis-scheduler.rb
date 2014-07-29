@@ -1,15 +1,32 @@
-## A basic chronological scheduler for Redis.
+## A simple, production-ready chronological scheduler for Redis.
 ##
 ## Use #schedule! to add an item to be processed at an arbitrary point in time.
-## The item will be converted to a string and later returned to you as such.
+## The item will be converted to a string and returned to you as such.
 ##
-## Use #each to iterate over those items in the schedule which are ready for
-## processing. In blocking mode, this call will never terminate. In nonblocking
-## mode, this call will terminate when there are no items ready for processing.
+## Use #each to iterate over those items at the scheduled time. This call
+## iterates over all items that are scheduled on or before the current time, in
+## chronological order. In blocking mode, this call will wait forever until
+## such items become available, and will never terminate. In non-blocking mode,
+## this call will only iterate over ready items and will terminate when there
+## are no items ready for processing.
 ##
-## Use #items to iterate over all items in the queue, for debugging purposes.
+## Use #items to simply iterate over all items in the queue, for debugging
+## purposes.
 ##
-## == Ensuring reliable behavior in the presence of segfaults
+## == Exceptions during processing
+##
+## Any exceptions during #each will result in the item being re-added to the
+## schedule at the original time.
+##
+## == Multiple producers and consumers
+##
+## Multiple producers and consumers are fine.
+##
+## == Concurrent reads and writes
+##
+## Concurrent reads and writes are fine.
+##
+## == Segfaults
 ##
 ## The scheduler maintains a "processing set" of items currently being
 ## processed. If a process dies (i.e. not as a result of a Ruby exception, but
@@ -25,18 +42,25 @@ class RedisScheduler
   CAS_DELAY  = 0.5 # seconds
 
   ## Options:
-  ## * +namespace+: prefix for Redis keys, e.g. "scheduler/"
+  ## * +namespace+: prefix for Redis keys, e.g. "scheduler/".
   ## * +blocking+: whether #each should block or return immediately if there are items to be processed immediately.
+  ## * +uniq+: when false (default), the same item can be scheduled for multiple times. When true, scheduling the same item multiple times only updates its scheduled time, and does not represent the item multiple times in the schedule.
   ##
-  ## Note that nonblocking mode may still actually block momentarily as part of
-  ## the check-and-set semantics, i.e. block during contention from multiple
-  ## clients. "Nonblocking" refers to whether the scheduler should wait until
-  ## events in the schedule are ready, or only return those items that are
-  ## ready currently.
+  ## Note that uniq is set on a per-schedule basis and cannot be changed. Once
+  ## a uniq schedule is created, it is forever uniq (until #reset! is called,
+  ## at least). Attempts to use non-uniq queues in a uniq manner, or vice versa,
+  ## will result in undefined behavior (probably errors).
+  ##
+  ## Note also that nonblocking mode may still actually block momentarily as
+  ## part of the check-and-set semantics, i.e. block during contention from
+  ## multiple clients. "Nonblocking" refers to whether the scheduler should
+  ## wait until events in the schedule are ready, or only return those items
+  ## that are ready currently.
   def initialize redis, opts={}
     @redis = redis
     @namespace = opts[:namespace]
     @blocking = opts[:blocking]
+    @uniq = opts[:uniq]
 
     @queue = [@namespace, "q"].join
     @processing_set = [@namespace, "processing"].join
@@ -45,8 +69,7 @@ class RedisScheduler
 
   ## Schedule an item at a specific time. item will be converted to a string.
   def schedule! item, time
-    id = @redis.incr @counter
-    @redis.zadd @queue, time.to_f, "#{id}:#{item}"
+    @redis.zadd @queue, time.to_f, make_entry(item)
   end
 
   ## Drop all data and reset the schedule entirely.
@@ -60,8 +83,8 @@ class RedisScheduler
   ## Returns the total number of items currently being processed.
   def processing_set_size; @redis.scard @processing_set end
 
-  ## Yields items along with their scheduled times. only returns items on or
-  ## after their scheduled times. items are returned as strings. if @blocking is
+  ## Yields items along with their scheduled times. Only returns items on or
+  ## after their scheduled times. Items are returned as strings. If @blocking is
   ## false, will stop once there are no more items that can be processed
   ## immediately; if it's true, will wait until items become available (and
   ## never terminate).
@@ -93,7 +116,7 @@ class RedisScheduler
   ## to the schedule happen while iterating.
   ##
   ## For these reasons, this is mainly useful for debugging purposes.
-  def items; ItemEnumerator.new(@redis, @queue) end
+  def items; ItemEnumerator.new(@redis, @queue, @uniq) end
 
   ## Returns an Array of [item, timestamp, descriptor] tuples representing the
   ## set of in-process items. The timestamp corresponds to the time at which
@@ -106,6 +129,26 @@ class RedisScheduler
   end
 
 private
+
+  ## generate the value actually stored in redis
+  def make_entry item
+    if @uniq
+      item.to_s
+    else
+      id = @redis.incr @counter
+      "#{id}:#{item}"
+    end
+  end
+
+  ## the inverse of #make_item_value
+  def parse_entry entry
+    if @uniq
+      entry
+    else
+      entry =~ /^\d+:(\S+)$/ or raise InvalidEntryException, entry
+      $1
+    end
+  end
 
   def get descriptor; @blocking ? blocking_get(descriptor) : nonblocking_get(descriptor) end
 
@@ -125,8 +168,7 @@ private
       entries = @redis.zrangebyscore @queue, 0, Time.now.to_f, :withscores => true, :limit => [0, 1]
       break unless entries.size > 0
       entry, at = entries.first
-      entry =~ /^\d+:(\S+)$/ or raise InvalidEntryException, entry
-      item = $1
+      item = parse_entry entry
       descriptor = Marshal.dump [item, Time.now.to_i, descriptor]
       @redis.multi do # try and grab it
         @redis.zrem @queue, entry
@@ -148,9 +190,10 @@ private
   ## Supports random access with #[], with the same caveats as above.
   class ItemEnumerator
     include Enumerable
-    def initialize redis, q
+    def initialize redis, q, uniq
       @redis = redis
       @q = q
+      @uniq = uniq
     end
 
     PAGE_SIZE = 50
@@ -164,16 +207,24 @@ private
     end
 
     def [] start, num=nil
-      elements = @redis.zrange @q, start, start + (num || 0) - 1, :withscores => true
-      v = elements.each_slice(2).map do |item, at|
-        item =~ /^\d+:(\S+)$/ or raise InvalidEntryException, item
-        item = $1
+      elements = @redis.zrange @q, start, start + (num || 0), :withscores => true
+      v = elements.map do |entry, at|
+        item = parse_entry entry
         [item, Time.at(at.to_f)]
       end
       num ? v : v.first
     end
 
     def size; @redis.zcard @q end
-  end
 
+    ## duplicated :(
+    def parse_entry entry
+      if @uniq
+        entry
+      else
+        entry =~ /^\d+:(\S+)$/ or raise InvalidEntryException, entry
+        $1
+      end
+    end
+  end
 end
