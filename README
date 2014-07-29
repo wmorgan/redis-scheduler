@@ -1,24 +1,22 @@
-RedisScheduler is a chronological scheduler for Redis. It allows you to schedule
-items to be processed at arbitrary points in time (via RedisScheduler#schedule!)
-and easily retrieve only those items that are due to be processed (via
-RedisScheduler#each).
+A simple, production-ready chronological scheduler for Redis. It allows you to
+schedule items to be processed at arbitrary points in the future, and easily
+retrieve only those items that are due to be processed.
 
 It does everything you'd expect from a production scheduler:
-* You can schedule items at arbitrary times.
+* You can schedule arbitrary items at arbitrary times.
 * You can iterate over ready items in either blocking or non-blocking mode.
-* It supports multiple simultaneous readers and writers.
-* A Ruby exception causes the item to be rescheduled at the original time.
-* Work items lost as part of a Ruby crash or segfault are recoverable.
+* It supports multiple concurrent producers and consumers.
+* An application exception causes the item to be rescheduled at the original time.
+* Work items lost as part of an application crash or segfault are recoverable.
 
-In non-blocking mode (the default), RedisScheduler#each will iterate only over
-those work items whose scheduled time is less than or equal to the current time,
-and then stop. In blocking mode, RedisScheduler#each will iterate over the same
-items, but will also block until items are available. In this mode, #each will
-never return.
+In non-blocking mode, RedisScheduler#each will iterate over only those items
+whose scheduled time is less than or equal to the current time, and then stop.
+In blocking mode, RedisScheduler#each will additionally wait until further
+items are available. In nonblocking mode, #each will never return.
 
 For debugging purposes, you can use RedisScheduler#items to iterate over all
-items in the queue, but note that this method is not guaranteed to be
-consistent.
+items in the queue. Note that this method is not guaranteed to be consistent in
+the presence of contemporaneous producers or consumers.
 
 For error recovery purposes, you can use RedisScheduler#processing_set_items
 to iterate over all the items in the processing set to determine whether any
@@ -40,6 +38,10 @@ of them are the result of a process crash.
   15.05255288: b
   20.06058172: c
   ... waits forever ...
+
+== Documentation
+
+See RedisScheduler's #initiatilize, schedule! and #each methods.
 
 == Implementation
 
